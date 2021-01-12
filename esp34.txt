@@ -1,0 +1,199 @@
+#include "freertos/FreeRTOS.h"
+
+#include "freertos/task.h"
+
+
+
+
+#include<PubSubClient.h>
+#include<WiFi.h>
+#include<string.h>
+
+#include<iostream>
+using namespace std;
+
+#define LED 14
+
+const char* id = "123456";
+const char ssid[] = "aaa";
+const char pass[] = "22061999";
+
+const char* broker = "192.168.1.239";
+const int port = 1883;
+
+
+
+long long int last = 0;
+
+bool authen = false;
+bool led = false;
+
+String authen_channel = "esp32/authentication/" + String(id);
+String pulseSensor_channel = "esp32/pulseSensor/" + String(id);
+String led_channel = "esp32/led/" + String(id);
+
+
+TaskHandle_t TaskHandle_on;
+TaskHandle_t TaskHandle_off;
+
+
+WiFiClient wfClient;
+PubSubClient client(wfClient);
+
+
+
+
+
+void connectWifi() {
+  WiFi.begin(ssid, pass);
+  while (WiFi.status() != WL_CONNECTED) {
+    Serial.println("Connecting...");
+    delay(500);
+  }
+  Serial.println("Connected");
+}
+
+void reconnect() {
+  connectWifi();
+  while (!client.connected()) {
+    Serial.println("Attempting MQTT connection....");
+    if (client.connect("ESP32Client")) {
+      Serial.println("Connected to MQTT server");
+      const char* a = authen_channel.c_str();
+      const char* b = led_channel.c_str();
+      client.subscribe(a);
+      client.subscribe(b);
+    }
+    else {
+      Serial.println("Can not connect to MQTT server.Wait 5s to reconnect ...");
+      delay(5000);
+    }
+  }
+}
+
+void callback(char* topic, byte* mess, unsigned int length) {
+  String messTemp = "";
+  for (int i = 0; i < length; i++) {
+    messTemp += (char(mess[i]));
+  }
+  if (String(topic) == authen_channel) {
+
+    if (messTemp == "ok") authen = true;
+  }
+
+  if (String(topic) == led_channel) {
+
+    if (messTemp == "on") {
+      xTaskCreate(&Task1, "LED_ON", 512, NULL, 1, &TaskHandle_on);
+
+    }
+    else if (messTemp == "off") {
+
+      xTaskCreate(&Task2, "LED_OF", 512, NULL, 1, &TaskHandle_off);
+      //vTaskStartScheduler();
+    }
+  }
+
+  Serial.print(messTemp);
+}
+
+
+void led_blink(bool led) {
+  if (led) {
+    while (1) {
+      digitalWrite(LED, HIGH);
+      delay(100);
+      digitalWrite(LED, LOW);
+      delay(100);
+    }
+  }
+  else digitalWrite(LED, LOW);
+}
+void setup() {
+  Serial.begin(9600);
+  connectWifi();
+  pinMode(LED, OUTPUT);
+  digitalWrite(LED, LOW);
+  client.setServer(broker, port);
+  client.setCallback(callback);
+  if (!client.connected()) {
+    reconnect();
+  }
+
+  client.publish("esp32/authentication", id);
+
+
+
+
+}
+
+void loop() {
+  if (!client.connected()) {
+    reconnect();
+  }
+  client.loop();
+  delay(10);
+  if (authen) {
+    if (Serial.available()) {
+      String temp;
+      int i;
+      while (Serial.available()) {
+        temp = Serial.readString();
+      }
+      int length_mess = temp.length();
+      char mess[length_mess];
+      for (i = 0; i < length_mess; i++) {
+        mess[i] = char(temp[i]);
+      }
+      mess[i] = '\0';
+      const char* x = pulseSensor_channel.c_str();
+      client.publish(x, mess);
+      Serial.println(temp);
+    }
+  }
+}
+
+void Task1(void* pvParameters) {
+  if(TaskHandle_off != NULL){
+       vTaskDelete(TaskHandle_off);
+       TaskHandle_off = NULL;
+  }
+
+  vTaskDelay( 100 / portTICK_RATE_MS );
+
+  while (1) {
+    digitalWrite(LED, HIGH);
+    vTaskDelay( 100 / portTICK_RATE_MS );
+    digitalWrite(LED, LOW);
+    vTaskDelay( 100 / portTICK_RATE_MS );
+  }
+}
+
+void Task2(void* pvParameters) {
+  if(TaskHandle_on != NULL){
+    vTaskDelete(TaskHandle_on);
+    TaskHandle_on = NULL;
+  }
+  
+  vTaskDelay( 100 / portTICK_RATE_MS );
+  while (1) {
+    
+    vTaskDelay( 100 / portTICK_RATE_MS );
+
+    digitalWrite(LED, LOW);
+    //    vTaskDelay( 100 / portTICK_RATE_MS );
+  }
+
+
+
+
+}
+
+
+
+
+
+
+
+
+

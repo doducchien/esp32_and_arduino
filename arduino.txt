@@ -1,0 +1,52 @@
+
+#include<SoftwareSerial.h>
+#define Rx 11
+#define Tx 12
+#define USE_ARDUINO_INTERRUPTS true    
+#include <PulseSensorPlayground.h>      
+
+SoftwareSerial mySerial(Rx, Tx);
+
+const int PulseWire = A0;       
+const int LED13 = 13;          
+int Threshold = 550;           
+                                
+                               
+PulseSensorPlayground pulseSensor;  
+
+void setup() {   
+
+  Serial.begin(9600);        
+ 
+  mySerial.begin(9600);
+
+  pulseSensor.analogInput(PulseWire);   
+  pulseSensor.blinkOnPulse(LED13);       
+  pulseSensor.setThreshold(Threshold);   
+
+  
+   if (pulseSensor.begin()) {
+//    Serial.println("We created a pulseSensor Object !"); 
+  }
+}
+
+
+
+void loop() {
+ 
+   
+if (pulseSensor.sawStartOfBeat()) {
+  delay(10); 
+ int myBPM = pulseSensor.getBeatsPerMinute();
+
+ String a = String(myBPM);
+ mySerial.print(a);
+ delay(100);
+                 
+}
+
+  delay(1000);
+
+}
+
+  
